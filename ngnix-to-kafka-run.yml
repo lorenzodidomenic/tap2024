@@ -1,5 +1,6 @@
 version: '3.7'
 services:
+    #facciamo partire un container nella rete tap con zookeper attivo
     zookeeper:
         image: tap:kafka
         container_name: kafkaZK
@@ -8,6 +9,7 @@ services:
         networks: 
             tap:
                 ipv4_address: 10.0.100.22
+     #facciamo partire un container nella rete tap con Kafka server attivo
     kafkaserver:
         image: tap:kafka
         container_name: kafkaServer
@@ -21,6 +23,7 @@ services:
                 ipv4_address: 10.0.100.23
         depends_on:
             - zookeeper
+     #facciamo partire l'interfaccia grafica di Kafka 
     kafka-ui:
         image: provectuslabs/kafka-ui:latest
         container_name: kafkaWebUI
@@ -28,44 +31,23 @@ services:
             - KAFKA_CLUSTERS_0_NAME=local
             - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
         ports: 
-            - 8080:8080
+            - 8082:8080
         networks: 
             - tap
         depends_on:
             - kafkaserver
-    nginx:
-        image: tap:nginx
-        ports:
-            - "80:80"
-        networks: 
-            - tap
-        volumes:
-        - ngnix_logs:/var/log/nginx  
+        #facciamo partire un container(su cui montiamo il volume dove vogliamo i log) nella rete tap dove sarà attivo nginx 
    
-    flume:
-        depends_on:
-            - nginx
-        image: tap:flume
-        networks: 
-            - tap
-        environment:
-           FLUME_CONF_FILE: nginx.conf
-        volumes:
-            - ngnix_logs:/var/log/nginx
-    fluentd:
-        depends_on:
-            - nginx
-        image: tap:fluentd
-        command: "-c /fluentd/etc/nginx.conf"
-        networks: 
-            - tap
-        volumes:
-            - ngnix_logs:/var/log/nginx
-            - ./fluentd/conf:/fluentd/etc/
+
+    #facciamo partire un container con logstash 
+    #su di esso montiao il file nginx.conf all'internod i logstash.conf
+    #in nginx.conf abbiamo settato come sorgente il file condiviso access.log e come destinazione kafka 
     logstash:
-        depends_on:
-            - nginx
+        #depends_on:
+         #   - nginx
         image: tap:logstash
+        ports: 
+            - 8081:8080
         networks: 
             - tap
         environment:
@@ -73,6 +55,8 @@ services:
         volumes:
             - ngnix_logs:/var/log/nginx
             - ./logstash/pipeline/nginx.conf:/usr/share/logstash/pipeline/logstash.conf
+
+ #qui settiamo il volume all'interno della rete            
 volumes:
     ngnix_logs:
 networks:
@@ -82,6 +66,6 @@ networks:
         ipam:
             config:
                 - subnet: 10.0.100.1/24
-
+        external: true
 
 #     export KAFKA_HEAP_OPTS="-Xmx1G -Xms1G"
